@@ -35,6 +35,7 @@
 >   git config --global http.extraHeader "X-My-Auth: Basic YWE6YWE="
 > ```
 + `ENTRY` 入口 `uri`, 默认为 `/` (eg: `test`) 此时入口为 `/test/`
++ `SIZE_LIMIT` 请求大小限制，最小单位到MB，最大单位到GB (eg: `1G` 或 `10M` 或 `1G10M`)
 ### 部署
 #### Docker
 ```shell
