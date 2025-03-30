@@ -306,7 +306,7 @@ func proxyRequest(w http.ResponseWriter, r *http.Request, targetURL string, allo
 	}
 }
 
-// 检查 URL 是否匹配 GitHub 模式
+// CheckURL 检查 URL 是否匹配 GitHub 模式
 func checkURL(u string) []string {
 	// 先查缓存
 	if cached, ok := regexCache.Load(u); ok {
