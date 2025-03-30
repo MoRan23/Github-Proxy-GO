@@ -19,11 +19,11 @@
 ### 配置
 + `WHITE_LIST` 白名单 (eg: `user1,user1/repo,*/repo1`)
 + `BLACK_LIST` 黑名单 (eg: `user1/repo,*/repo1`)  
-> [!IMPORTANT]  
+> **Tip**  
 >   生效顺序 白->黑
 + `USER` 用户名 (eg: `user`)
 + `PASSWORD` 密码 (eg: `pass`)  
-> [!INFO]  
+> **Tip**  
 >   防止被蹭，身份认证为必须项。  
 >   认证头为 `X-My-Auth`, 值为 `Basic base64(USER:PASSWORD)`  
 >   使用方法为:  
