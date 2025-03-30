@@ -246,7 +246,7 @@ func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request, allo
 		fmt.Println("Location:", location)
 		_, _, valid := checkURL(location)
 		if valid {
-			w.Header().Set("Location", "/"+location)
+			w.Header().Set("Location", entry+location)
 		} else {
 			proxyRequest(location, w, r, true)
 			return
