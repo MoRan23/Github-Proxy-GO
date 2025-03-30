@@ -172,12 +172,12 @@ func proxyGHHandle(w http.ResponseWriter, r *http.Request) {
 // 执行代理请求
 func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request, allowRedirects bool) {
 	client := &http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if allowRedirects {
-				return nil
-			}
-			return http.ErrUseLastResponse
-		},
+		//CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		//	if allowRedirects {
+		//		return nil
+		//	}
+		//	return http.ErrUseLastResponse
+		//},
 	}
 
 	// 解析目标 URL（targetURL 应为完整 URL，如 "https://example.com/path"）
