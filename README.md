@@ -19,18 +19,17 @@
 ### 配置
 + `WHITE_LIST` 白名单 (eg: `user1,user1/repo,*/repo1`)
 + `BLACK_LIST` 黑名单 (eg: `user1/repo,*/repo1`)  
-!!! info
+> [!INFO]  
     生效顺序 白->黑
 + `USER` 用户名 (eg: `user`)
 + `PASSWORD` 密码 (eg: `pass`)  
-!!! info
+> [!INFO]  
     防止被蹭，身份认证为必须项。  
     认证头为 `X-My-Auth`, 值为 `Basic base64(USER:PASSWORD)`  
     使用方法为:  
-    ```shell
-    # 单次
-    git -c http.extraHeader="X-My-Auth: Basic YWE6YWE=" clone https://domain/https://github.com/xx/xx.git
-    # 永久
+    # 单次  
+    git -c http.extraHeader="X-My-Auth: Basic YWE6YWE=" clone https://domain/https://github.com/xx/xx.git  
+    # 永久  
     git config --global http.extraHeader "X-My-Auth: Basic YWE6YWE="
     ```
 + `ENTRY` 入口 `uri`, 默认为 `/` (eg: `test`) 此时入口为 `/test/`
