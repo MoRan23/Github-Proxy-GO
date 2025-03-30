@@ -165,20 +165,13 @@ func proxyGHHandle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 代理请求
-	proxyRequest(urlStr, w, r, false)
+	proxyRequest(urlStr, w, r)
 
 }
 
 // 执行代理请求
-func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request, allowRedirects bool) {
-	client := &http.Client{
-		//CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		//	if allowRedirects {
-		//		return nil
-		//	}
-		//	return http.ErrUseLastResponse
-		//},
-	}
+func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request) {
+	client := &http.Client{}
 
 	// 解析目标 URL（targetURL 应为完整 URL，如 "https://example.com/path"）
 	target, err := url.Parse(targetURL)
@@ -247,7 +240,7 @@ func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request, allo
 		if valid {
 			w.Header().Set("Location", entry+location)
 		} else {
-			proxyRequest(location, w, r, true)
+			proxyRequest(location, w, r)
 			return
 		}
 	}
