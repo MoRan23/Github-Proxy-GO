@@ -27,10 +27,10 @@ var (
 	exp4 = regexp.MustCompile(`^(?:https?://)?raw\.(?:githubusercontent|github)\.com/(?P<author>.+?)/(?P<repo>.+?)/.+?/.+$`)
 	exp5 = regexp.MustCompile(`^(?:https?://)?gist\.(?:githubusercontent|github)\.com/(?P<author>.+?)/.+?/.+$`)
 
-	// 白名单、黑名单和通过列表
+	regexpList = []*regexp.Regexp{exp1, exp2, exp3, exp4, exp5}
+
 	whiteList = parseList(``)
 	blackList = parseList(``)
-	passList  = parseList(``)
 
 	AUTH_USERNAME string // 认证用户名
 	AUTH_PASSWORD string // 认证密码
@@ -50,8 +50,7 @@ func init() {
 	// 初始化黑白名单 (可以从环境变量或配置文件加载)
 	whiteList = parseList(os.Getenv("WHITE_LIST"))
 	blackList = parseList(os.Getenv("BLACK_LIST"))
-	passList = parseList(os.Getenv("PASS_LIST"))
-	fmt.Printf("Set White_List: %v\nSet Black_List: %v\nSet Pass_List: %v\n", whiteList, blackList, passList)
+	fmt.Printf("Set White_List: %v\nSet Black_List: %v\n", whiteList, blackList)
 	// 初始化认证配置
 	AUTH_USERNAME = os.Getenv("USER")
 	AUTH_PASSWORD = os.Getenv("PASSWORD")
@@ -61,7 +60,7 @@ func init() {
 	fmt.Printf("Set User: %s\nSet Password: %s\n", AUTH_USERNAME, AUTH_PASSWORD)
 	// 从环境变量读取文件大小限制，默认 1GB (1 << 30)
 	if envSize := os.Getenv("SIZE_LIMIT"); envSize != "" {
-		parsed, err := ParseSimpleSize(envSize)
+		parsed, err := parseSimpleSize(envSize)
 		if err != nil {
 			fmt.Printf("Error parsing SIZE_LIMIT: %v\n", err)
 			fmt.Printf("Using default size limit: %d bytes (1GB)\n", SIZE_LIMIT)
@@ -79,7 +78,7 @@ func init() {
 
 func main() {
 	//http.HandleFunc(entry, authMiddleware(handleProxy))
-	http.HandleFunc(entry, handleProxy)
+	http.HandleFunc(entry, proxyGHHandle)
 	log.Printf("Starting server on %s\n", PORT)
 	if err := http.ListenAndServe(PORT, nil); err != nil {
 		log.Fatalf("Server failed: %v\n", err)
@@ -124,9 +123,11 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // 处理代理请求
-func handleProxy(w http.ResponseWriter, r *http.Request) {
+func proxyGHHandle(w http.ResponseWriter, r *http.Request) {
+	// /https://github.com/..... -> https://github.com/.....
 	path := strings.TrimPrefix(r.URL.Path, entry)
 	urlStr := path
+	// 如果不是以http开头，则添加https
 	if !strings.HasPrefix(urlStr, "http") {
 		urlStr = "https://" + urlStr
 	}
@@ -136,6 +137,10 @@ func handleProxy(w http.ResponseWriter, r *http.Request) {
 		urlStr = strings.Replace(urlStr, "s:/", "s://", 1)
 	}
 
+	// 检查URL是否匹配GitHub格式
+	// author: 作者
+	// repo: 仓库
+	// valid: 是否匹配
 	author, repo, valid := checkURL(urlStr)
 	if !valid {
 		http.Error(w, "Invalid input.", http.StatusForbidden)
@@ -156,26 +161,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 是否通过并使用jsDelivr
-	passBy := matchListItem(author, repo, passList)
-
 	if exp2.MatchString(urlStr) {
 		urlStr = strings.Replace(urlStr, "/blob/", "/raw/", 1)
 	}
-
-	if passBy {
-		queryStr := ""
-		if r.URL.RawQuery != "" {
-			queryStr = "?" + r.URL.RawQuery
-		}
-		redirectURL := urlStr + queryStr
-		if strings.HasPrefix(redirectURL, "https:/") && !strings.HasPrefix(redirectURL, "https://") {
-			redirectURL = "https://" + redirectURL[7:]
-		}
-		http.Redirect(w, r, redirectURL, http.StatusFound)
-		return
-	}
-
 	// 代理请求
 	proxyRequest(urlStr, w, r, false)
 
@@ -192,22 +180,32 @@ func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request, allo
 		},
 	}
 
-	// 准备请求
-	queryStr := ""
+	// 解析目标 URL（targetURL 应为完整 URL，如 "https://example.com/path"）
+	target, err := url.Parse(targetURL)
+	if err != nil {
+		http.Error(w, "Server error: "+err.Error(), http.StatusInternalServerError)
+		// 处理解析错误（如 targetURL 格式无效）
+		return
+	}
+
+	// 合并原始请求的查询参数到目标 URL
 	if r.URL.RawQuery != "" {
-		queryStr = "?" + r.URL.RawQuery
+		// 解析原始请求的查询参数
+		sourceQuery := r.URL.Query()
+
+		// 合并到目标 URL 的查询参数（同名参数会被覆盖）
+		targetQuery := target.Query()
+		for key, values := range sourceQuery {
+			targetQuery[key] = values // 保留原始值的切片
+		}
+
+		// 重新编码查询参数
+		target.RawQuery = targetQuery.Encode()
 	}
 
-	fullURL := targetURL + queryStr
-	if strings.HasPrefix(fullURL, "https:/") && !strings.HasPrefix(fullURL, "https://") {
-		fullURL = "https://" + fullURL[7:]
-	}
-
-	// 转义URL
-	fullURL = url.QueryEscape(fullURL)
-	// 保留 : / 不被转义
-	fullURL = strings.Replace(fullURL, "%3A", ":", -1)
-	fullURL = strings.Replace(fullURL, "%2F", "/", -1)
+	// 生成最终完整 URL（自动处理协议、路径和编码）
+	fullURL := target.String()
+	queryStr := target.RawQuery
 
 	// 创建请求
 	req, err := http.NewRequest(r.Method, fullURL, r.Body)
@@ -236,7 +234,7 @@ func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request, allo
 	// 检查内容长度是否超过限制
 	if contentLength := resp.Header.Get("Content-Length"); contentLength != "" {
 		if length, err := fmt.Sscanf(contentLength, "%d"); err == nil && length > SIZE_LIMIT {
-			http.Redirect(w, r, targetURL+queryStr, http.StatusFound)
+			http.Redirect(w, r, targetURL+"?"+queryStr, http.StatusFound)
 			return
 		}
 	}
@@ -255,6 +253,9 @@ func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request, allo
 	// 复制响应头
 	for key, values := range resp.Header {
 		for _, value := range values {
+			if key == "Location" {
+				continue
+			}
 			w.Header().Add(key, value)
 		}
 	}
@@ -264,6 +265,11 @@ func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request, allo
 
 	// 分块传输响应体
 	buf := make([]byte, CHUNK_SIZE)
+	f, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	}
 	for {
 		n, err := resp.Body.Read(buf)
 		if err != nil && err != io.EOF {
@@ -277,9 +283,7 @@ func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request, allo
 			break
 		}
 
-		if f, ok := w.(http.Flusher); ok {
-			f.Flush()
-		}
+		f.Flush()
 
 		if err == io.EOF {
 			break
@@ -289,7 +293,7 @@ func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request, allo
 
 // 检查URL是否匹配GitHub格式
 func checkURL(u string) (string, string, bool) {
-	for _, exp := range []*regexp.Regexp{exp1, exp2, exp3, exp4, exp5} {
+	for _, exp := range regexpList {
 		matches := exp.FindStringSubmatch(u)
 		if len(matches) > 2 {
 			return matches[1], matches[2], true
@@ -335,8 +339,8 @@ func parseList(list string) []ListItem {
 	return result
 }
 
-// ParseSimpleSize 解析简化的容量字符串（支持 M/G 单位），最大限制 999GB
-func ParseSimpleSize(sizeStr string) (int, error) {
+// 解析简化的容量字符串（支持 M/G 单位），最大限制 999GB
+func parseSimpleSize(sizeStr string) (int, error) {
 	sizeStr = strings.ToUpper(strings.TrimSpace(sizeStr))
 	if sizeStr == "" {
 		return 0, nil
