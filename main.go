@@ -125,7 +125,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 // 处理代理请求
 func handleProxy(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/GTHSecC/")
+	path := strings.TrimPrefix(r.URL.Path, entry)
 	urlStr := path
 	if !strings.HasPrefix(urlStr, "http") {
 		urlStr = "https://" + urlStr
