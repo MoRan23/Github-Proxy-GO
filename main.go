@@ -249,6 +249,7 @@ func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request, allo
 
 	// 处理重定向
 	if location := resp.Header.Get("Location"); location != "" {
+		fmt.Println("Location:", location)
 		_, _, valid := checkURL(location)
 		if valid {
 			w.Header().Set("Location", "/"+location)
