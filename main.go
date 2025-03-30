@@ -239,7 +239,7 @@ func proxyRequest(w http.ResponseWriter, r *http.Request, targetURL string, allo
 
 	// 复制请求头
 	for k, v := range r.Header {
-		if k != "Host" {
+		if k != "Host" && k != "X-My-Auth" {
 			req.Header[k] = v
 		}
 	}
