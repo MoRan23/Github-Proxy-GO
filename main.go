@@ -11,45 +11,39 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 )
 
-// 配置常量
 const (
-	chunkSize     = 10240 // 10KB 块大小
-	defaultListen = ":80" // 默认监听地址
-	maxSizeGB     = 999
+	PORT = ":80" // 监听端口
+
+	CHUNK_SIZE = 1024 * 10 // 分块大小
 )
 
 var (
-	// 正则表达式匹配 GitHub URL 模式
+	// 编译正则表达式
 	exp1 = regexp.MustCompile(`^(?:https?://)?github\.com/(?P<author>.+?)/(?P<repo>.+?)/(?:releases|archive)/.*$`)
 	exp2 = regexp.MustCompile(`^(?:https?://)?github\.com/(?P<author>.+?)/(?P<repo>.+?)/(?:blob|raw)/.*$`)
 	exp3 = regexp.MustCompile(`^(?:https?://)?github\.com/(?P<author>.+?)/(?P<repo>.+?)/(?:info|git-).*$`)
 	exp4 = regexp.MustCompile(`^(?:https?://)?raw\.(?:githubusercontent|github)\.com/(?P<author>.+?)/(?P<repo>.+?)/.+?/.+$`)
 	exp5 = regexp.MustCompile(`^(?:https?://)?gist\.(?:githubusercontent|github)\.com/(?P<author>.+?)/.+?/.+$`)
 
-	// 认证配置
-	authUsername string
-	authPassword string
-	//requireAuth  = true
+	// 白名单、黑名单和通过列表
+	whiteList = parseList(``)
+	blackList = parseList(``)
+	passList  = parseList(``)
+
+	AUTH_USERNAME string // 认证用户名
+	AUTH_PASSWORD string // 认证密码
+	// REQUIRE_AUTH  = true                     // 是否启用认证
 	entry = "/"
 
-	// 黑白名单
-	whiteList []tuple
-	blackList []tuple
-	passList  []tuple
-
-	jsdelivr  = 0       // 是否使用 jsDelivr 镜像
-	sizeLimit = 1 << 30 // 1GB 文件大小限制
-
-	// 缓存正则匹配结果
-	regexCache = sync.Map{}
+	SIZE_LIMIT = 1024 * 1024 * 1024 // 允许的文件大小，默认999GB
+	maxSizeGB  = 999                // 最大文件大小限制
 )
 
-type tuple struct {
-	user string
-	repo string
+type ListItem struct {
+	Author string
+	Repo   string
 }
 
 func init() {
@@ -59,28 +53,23 @@ func init() {
 	passList = parseList(os.Getenv("PASS_LIST"))
 	fmt.Printf("Set White_List: %v\nSet Black_List: %v\nSet Pass_List: %v\n", whiteList, blackList, passList)
 	// 初始化认证配置
-	authUsername = os.Getenv("USER")
-	authPassword = os.Getenv("PASSWORD")
-	if authUsername == "" || authPassword == "" {
+	AUTH_USERNAME = os.Getenv("USER")
+	AUTH_PASSWORD = os.Getenv("PASSWORD")
+	if AUTH_PASSWORD == "" || AUTH_USERNAME == "" {
 		log.Fatal("USER or PASSWORD is empty")
 	}
-	fmt.Printf("Set User: %s\nSet Password: %s\n", authUsername, authPassword)
-	// 初始化 jsDelivr 配置
-	if os.Getenv("JSDelivr") == "1" {
-		jsdelivr = 1
-	}
-	fmt.Printf("Set jsdelivr: %d\n", jsdelivr)
+	fmt.Printf("Set User: %s\nSet Password: %s\n", AUTH_USERNAME, AUTH_PASSWORD)
 	// 从环境变量读取文件大小限制，默认 1GB (1 << 30)
 	if envSize := os.Getenv("SIZE_LIMIT"); envSize != "" {
 		parsed, err := ParseSimpleSize(envSize)
 		if err != nil {
 			fmt.Printf("Error parsing SIZE_LIMIT: %v\n", err)
-			fmt.Printf("Using default size limit: %d bytes (1GB)\n", sizeLimit)
+			fmt.Printf("Using default size limit: %d bytes (1GB)\n", SIZE_LIMIT)
 			return
 		}
-		sizeLimit = parsed
+		SIZE_LIMIT = parsed
 	}
-	fmt.Printf("Size limit set to %d bytes\n", sizeLimit)
+	fmt.Printf("Size limit set to %d bytes\n", SIZE_LIMIT)
 	// 入口端点设置
 	if os.Getenv("ENTRY") != "" {
 		entry = "/" + os.Getenv("ENTRY") + "/"
@@ -89,10 +78,10 @@ func init() {
 }
 
 func main() {
-	http.HandleFunc(entry, authMiddleware(proxyHandler))
+	http.HandleFunc(entry, authMiddleware(handleProxy))
 
-	log.Printf("Starting server on %s\n", defaultListen)
-	if err := http.ListenAndServe(defaultListen, nil); err != nil {
+	log.Printf("Starting server on %s\n", PORT)
+	if err := http.ListenAndServe(PORT, nil); err != nil {
 		log.Fatalf("Server failed: %v\n", err)
 	}
 }
@@ -100,32 +89,32 @@ func main() {
 // 认证中间件
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		//if !requireAuth {
+		//if !REQUIRE_AUTH {
 		//	next(w, r)
 		//	return
 		//}
 
-		authHeader := r.Header.Get("X-My-Auth")
-		if authHeader == "" {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Login Required"`)
+		auth := r.Header.Get("X-My-Auth")
+		if auth == "" {
+			w.Header().Set("WWW-Authenticate", "Basic realm=\"Login Required\"")
 			http.Error(w, "Authentication required", http.StatusUnauthorized)
 			return
 		}
 
-		authParts := strings.SplitN(authHeader, " ", 2)
-		if len(authParts) != 2 || authParts[0] != "Basic" {
+		parts := strings.SplitN(auth, " ", 2)
+		if len(parts) != 2 {
 			http.Error(w, "Invalid authentication", http.StatusUnauthorized)
 			return
 		}
 
-		decoded, err := base64.StdEncoding.DecodeString(authParts[1])
+		decoded, err := base64.StdEncoding.DecodeString(parts[1])
 		if err != nil {
 			http.Error(w, "Invalid authentication", http.StatusUnauthorized)
 			return
 		}
 
-		creds := strings.SplitN(string(decoded), ":", 2)
-		if len(creds) != 2 || creds[0] != authUsername || creds[1] != authPassword {
+		credentials := strings.SplitN(string(decoded), ":", 2)
+		if len(credentials) != 2 || credentials[0] != AUTH_USERNAME || credentials[1] != AUTH_PASSWORD {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 			return
 		}
@@ -134,117 +123,66 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// 主代理处理函数
-func proxyHandler(w http.ResponseWriter, r *http.Request) {
-	u := strings.TrimPrefix(r.URL.Path, entry)
-	if !strings.HasPrefix(u, "http") {
-		u = "https://" + u
+// 处理代理请求
+func handleProxy(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/GTHSecC/")
+	urlStr := path
+	if !strings.HasPrefix(urlStr, "http") {
+		urlStr = "https://" + urlStr
 	}
 
-	// 修复 URL 格式
-	if strings.Index(u[3:], "://") == -1 {
-		u = strings.Replace(u, "s:/", "s://", 1)
+	// 修复URL格式
+	if strings.Index(urlStr, "://") == -1 {
+		urlStr = strings.Replace(urlStr, "s:/", "s://", 1)
 	}
 
-	passBy := false
-	m := checkURL(u)
-	if m != nil {
-		t := tuple{m[1], m[2]}
-
-		// 检查白名单
-		if len(whiteList) > 0 {
-			allowed := false
-			for _, item := range whiteList {
-				if matchTuple(t, item) {
-					allowed = true
-					break
-				}
-			}
-			if !allowed {
-				http.Error(w, "Forbidden by white list", http.StatusForbidden)
-				return
-			}
-		}
-
-		// 检查黑名单
-		for _, item := range blackList {
-			if matchTuple(t, item) {
-				http.Error(w, "Forbidden by black list", http.StatusForbidden)
-				return
-			}
-		}
-
-		// 检查直通名单
-		for _, item := range passList {
-			if matchTuple(t, item) {
-				passBy = true
-				break
-			}
-		}
-	} else {
-		http.Error(w, "Invalid input", http.StatusForbidden)
+	author, repo, valid := checkURL(urlStr)
+	if !valid {
+		http.Error(w, "Invalid input.", http.StatusForbidden)
 		return
 	}
 
-	// 处理 jsDelivr 重定向
-	if (jsdelivr != 0 || passBy) && exp2.MatchString(u) {
-		newURL := strings.Replace(u, "/blob/", "@", 1)
-		newURL = strings.Replace(newURL, "github.com", "cdn.jsdelivr.net/gh", 1)
-		http.Redirect(w, r, newURL, http.StatusFound)
-		return
-	} else if (jsdelivr != 0 || passBy) && exp4.MatchString(u) {
-		newURL := regexp.MustCompile(`(\.com/.*?/.+?)/(.+?/)`).ReplaceAllString(u, "${1}@${2}")
-		if strings.Contains(newURL, "raw.githubusercontent.com") {
-			newURL = strings.Replace(newURL, "raw.githubusercontent.com", "cdn.jsdelivr.net/gh", 1)
-		} else {
-			newURL = strings.Replace(newURL, "raw.github.com", "cdn.jsdelivr.net/gh", 1)
+	// 白名单检查
+	if len(whiteList) > 0 {
+		if !matchListItem(author, repo, whiteList) {
+			http.Error(w, "Forbidden by white list.", http.StatusForbidden)
+			return
 		}
-		http.Redirect(w, r, newURL, http.StatusFound)
+	}
+
+	// 黑名单检查
+	if matchListItem(author, repo, blackList) {
+		http.Error(w, "Forbidden by black list.", http.StatusForbidden)
 		return
 	}
 
-	// 处理原始代理请求
-	if exp2.MatchString(u) {
-		u = strings.Replace(u, "/blob/", "/raw/", 1)
+	// 是否通过并使用jsDelivr
+	passBy := matchListItem(author, repo, passList)
+
+	if exp2.MatchString(urlStr) {
+		urlStr = strings.Replace(urlStr, "/blob/", "/raw/", 1)
 	}
 
 	if passBy {
-		newURL := u + strings.TrimPrefix(r.URL.String(), r.URL.Path)
-		if strings.HasPrefix(newURL, "https:/") && !strings.HasPrefix(newURL, "https://") {
-			newURL = "https://" + newURL[7:]
+		queryStr := ""
+		if r.URL.RawQuery != "" {
+			queryStr = "?" + r.URL.RawQuery
 		}
-		http.Redirect(w, r, newURL, http.StatusFound)
+		redirectURL := urlStr + queryStr
+		if strings.HasPrefix(redirectURL, "https:/") && !strings.HasPrefix(redirectURL, "https://") {
+			redirectURL = "https://" + redirectURL[7:]
+		}
+		http.Redirect(w, r, redirectURL, http.StatusFound)
 		return
 	}
 
-	// URL 编码并代理
-	escapedURL, _ := url.PathUnescape(u)
-	proxyRequest(w, r, escapedURL, false)
+	// 代理请求
+	proxyRequest(urlStr, w, r, false)
+
 }
 
-// 代理请求
-func proxyRequest(w http.ResponseWriter, r *http.Request, targetURL string, allowRedirects bool) {
-	// 构建目标 URL
-	fullURL := targetURL + strings.TrimPrefix(r.URL.String(), r.URL.Path)
-	if strings.HasPrefix(fullURL, "https:/") && !strings.HasPrefix(fullURL, "https://") {
-		fullURL = "https://" + fullURL[7:]
-	}
-
-	// 创建新请求
-	req, err := http.NewRequest(r.Method, fullURL, r.Body)
-	if err != nil {
-		http.Error(w, "Error creating request: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// 复制请求头
-	for k, v := range r.Header {
-		if k != "Host" && k != "X-My-Auth" {
-			req.Header[k] = v
-		}
-	}
-
-	// 发送请求aa
+// 执行代理请求
+func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request, allowRedirects bool) {
 	client := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if allowRedirects {
@@ -254,101 +192,128 @@ func proxyRequest(w http.ResponseWriter, r *http.Request, targetURL string, allo
 		},
 	}
 
+	// 准备请求
+	queryStr := ""
+	if r.URL.RawQuery != "" {
+		queryStr = "?" + r.URL.RawQuery
+	}
+
+	fullURL := targetURL + queryStr
+	if strings.HasPrefix(fullURL, "https:/") && !strings.HasPrefix(fullURL, "https://") {
+		fullURL = "https://" + fullURL[7:]
+	}
+
+	// 转义URL
+	fullURL = url.QueryEscape(fullURL)
+	// 保留 : / 不被转义
+	fullURL = strings.Replace(fullURL, "%3A", ":", -1)
+	fullURL = strings.Replace(fullURL, "%2F", "/", -1)
+
+	// 创建请求
+	req, err := http.NewRequest(r.Method, fullURL, r.Body)
+	if err != nil {
+		http.Error(w, "Server error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 复制请求头
+	for key, values := range r.Header {
+		if key != "Host" {
+			for _, value := range values {
+				req.Header.Add(key, value)
+			}
+		}
+	}
+
+	// 发送请求
 	resp, err := client.Do(req)
 	if err != nil {
-		http.Error(w, "Error making request: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Server error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer resp.Body.Close()
 
-	// 检查文件大小
+	// 检查内容长度是否超过限制
 	if contentLength := resp.Header.Get("Content-Length"); contentLength != "" {
-		if size, err := fmt.Sscanf(contentLength, "%d", new(int)); err == nil && size > sizeLimit {
-			http.Redirect(w, r, fullURL, http.StatusFound)
+		if length, err := fmt.Sscanf(contentLength, "%d"); err == nil && length > SIZE_LIMIT {
+			http.Redirect(w, r, targetURL+queryStr, http.StatusFound)
 			return
 		}
 	}
 
 	// 处理重定向
 	if location := resp.Header.Get("Location"); location != "" {
-		if checkURL(location) != nil {
-			resp.Header.Set("Location", "/"+location)
+		_, _, valid := checkURL(location)
+		if valid {
+			w.Header().Set("Location", "/"+location)
 		} else {
-			proxyRequest(w, r, location, true)
+			proxyRequest(location, w, r, true)
 			return
 		}
 	}
 
 	// 复制响应头
-	for k, v := range resp.Header {
-		w.Header()[k] = v
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
 	}
 
 	// 设置状态码
 	w.WriteHeader(resp.StatusCode)
 
-	// 流式传输响应体
-	buf := make([]byte, chunkSize)
+	// 分块传输响应体
+	buf := make([]byte, CHUNK_SIZE)
 	for {
 		n, err := resp.Body.Read(buf)
-		if n > 0 {
-			if _, err := w.Write(buf[:n]); err != nil {
-				log.Printf("Error writing response: %v", err)
-				break
-			}
-			if f, ok := w.(http.Flusher); ok {
-				f.Flush()
-			}
+		if err != nil && err != io.EOF {
+			break
 		}
+		if n == 0 {
+			break
+		}
+
+		if _, err := w.Write(buf[:n]); err != nil {
+			break
+		}
+
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+
 		if err == io.EOF {
 			break
 		}
-		if err != nil {
-			log.Printf("Error reading response: %v", err)
-			break
-		}
 	}
 }
 
-// CheckURL 检查 URL 是否匹配 GitHub 模式
-func checkURL(u string) []string {
-	// 先查缓存
-	if cached, ok := regexCache.Load(u); ok {
-		switch cached.(type) {
-		case nil:
-			return nil
-		case []string:
-			return cached.([]string) // 直接返回缓存结果
-		}
-	}
-
-	// 缓存未命中，执行正则匹配
+// 检查URL是否匹配GitHub格式
+func checkURL(u string) (string, string, bool) {
 	for _, exp := range []*regexp.Regexp{exp1, exp2, exp3, exp4, exp5} {
-		if matches := exp.FindStringSubmatch(u); matches != nil {
-			regexCache.Store(u, matches) // 存入缓存
-			return matches
+		matches := exp.FindStringSubmatch(u)
+		if len(matches) > 2 {
+			return matches[1], matches[2], true
 		}
 	}
-
-	regexCache.Store(u, nil) // 即使未匹配也缓存，避免后续重复计算
-	return nil
+	return "", "", false
 }
 
-// 检查元组是否匹配
-func matchTuple(target, pattern tuple) bool {
-	if pattern.user == "*" {
-		return target.repo == pattern.repo
+// 检查是否匹配列表项
+func matchListItem(author, repo string, list []ListItem) bool {
+	for _, item := range list {
+		if (item.Author == "*" && item.Repo == repo) ||
+			(item.Author == author && item.Repo == "") ||
+			(item.Author == author && item.Repo == repo) {
+			return true
+		}
 	}
-	if pattern.repo == "*" {
-		return target.user == pattern.user
-	}
-	return target.user == pattern.user && target.repo == pattern.repo
+	return false
 }
 
-// 解析列表字符串
-func parseList(listStr string) []tuple {
-	var result []tuple
-	lines := strings.Split(listStr, ",")
+// 解析列表配置
+func parseList(list string) []ListItem {
+	var result []ListItem
+	lines := strings.Split(list, ",")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -356,9 +321,15 @@ func parseList(listStr string) []tuple {
 		}
 		parts := strings.Split(line, "/")
 		if len(parts) == 1 {
-			result = append(result, tuple{user: parts[0], repo: "*"})
-		} else if len(parts) == 2 {
-			result = append(result, tuple{user: parts[0], repo: parts[1]})
+			result = append(result, ListItem{
+				Author: strings.TrimSpace(parts[0]),
+				Repo:   "",
+			})
+		} else if len(parts) >= 2 {
+			result = append(result, ListItem{
+				Author: strings.TrimSpace(parts[0]),
+				Repo:   strings.TrimSpace(parts[1]),
+			})
 		}
 	}
 	return result
