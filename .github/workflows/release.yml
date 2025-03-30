@@ -29,4 +29,3 @@ jobs:
           goarch: ${{ matrix.goarch }}
           goversion: "https://go.dev/dl/go1.23.2.linux-amd64.tar.gz"
           project_path: "."
-          extra_files: LICENSE README.md
