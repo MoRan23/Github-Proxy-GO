@@ -141,7 +141,6 @@ func proxyGHHandle(w http.ResponseWriter, r *http.Request) {
 	// repo: 仓库
 	// valid: 是否匹配
 	author, repo, valid := checkURL(urlStr)
-	fmt.Println(valid)
 	if !valid {
 		http.Error(w, "Invalid input.", http.StatusForbidden)
 		return
