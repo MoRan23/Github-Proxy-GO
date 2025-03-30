@@ -30,8 +30,8 @@ var (
 	exp5 = regexp.MustCompile(`^(?:https?://)?gist\.(?:githubusercontent|github)\.com/(?P<author>.+?)/.+?/.+$`)
 
 	// 认证配置
-	authUsername = "HSec"
-	authPassword = "HuhstSec@979."
+	authUsername string
+	authPassword string
 	//requireAuth  = true
 	entry = "/"
 
