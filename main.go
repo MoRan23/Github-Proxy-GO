@@ -26,7 +26,6 @@ var (
 	exp3 = regexp.MustCompile(`^(?:https?://)?github\.com/(?P<author>.+?)/(?P<repo>.+?)/(?:info|git-).*$`)
 	exp4 = regexp.MustCompile(`^(?:https?://)?raw\.(?:githubusercontent|github)\.com/(?P<author>.+?)/(?P<repo>.+?)/.+?/.+$`)
 	exp5 = regexp.MustCompile(`^(?:https?://)?gist\.(?:githubusercontent|github)\.com/(?P<author>.+?)/.+?/.+$`)
-	exp6 = regexp.MustCompile(`^(?:https?://)?github\.com/([\w-]+)/([\w.-]+)\.git$`)
 
 	regexpList = []*regexp.Regexp{exp1, exp2, exp3, exp4, exp5}
 
@@ -87,7 +86,6 @@ func main() {
 
 // 认证中间件
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	fmt.Println("authMiddleware")
 	return func(w http.ResponseWriter, r *http.Request) {
 		//if !REQUIRE_AUTH {
 		//	next(w, r)
@@ -118,7 +116,6 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 			return
 		}
-		fmt.Println("authMiddleware next")
 
 		next(w, r)
 	}
@@ -133,18 +130,11 @@ func proxyGHHandle(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(urlStr, "http") {
 		urlStr = "https://" + urlStr
 	}
-	fmt.Println("urlStr:", urlStr)
 
 	// 修复URL格式
 	if strings.Index(urlStr, "://") == -1 {
 		urlStr = strings.Replace(urlStr, "s:/", "s://", 1)
 	}
-
-	if exp6.MatchString(urlStr) {
-		http.Redirect(w, r, entry+urlStr+"/", http.StatusFound)
-		return
-	}
-	fmt.Println("urlStr2:", urlStr)
 
 	// 检查URL是否匹配GitHub格式
 	// author: 作者
@@ -174,7 +164,6 @@ func proxyGHHandle(w http.ResponseWriter, r *http.Request) {
 	if exp2.MatchString(urlStr) {
 		urlStr = strings.Replace(urlStr, "/blob/", "/raw/", 1)
 	}
-	fmt.Println("urlStr3:", urlStr)
 
 	// 代理请求
 	proxyRequest(urlStr, w, r, false)
@@ -199,7 +188,6 @@ func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request, allo
 		// 处理解析错误（如 targetURL 格式无效）
 		return
 	}
-	fmt.Println("target:", target)
 
 	// 合并原始请求的查询参数到目标 URL
 	if r.URL.RawQuery != "" {
@@ -219,8 +207,6 @@ func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request, allo
 	// 生成最终完整 URL（自动处理协议、路径和编码）
 	fullURL := target.String()
 	queryStr := target.RawQuery
-	fmt.Println("fullURL:", fullURL)
-	fmt.Println("queryStr:", queryStr)
 
 	fmt.Println("Fetch:", fullURL)
 
@@ -247,7 +233,6 @@ func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request, allo
 		return
 	}
 	defer resp.Body.Close()
-	fmt.Println("resp:", resp.Header.Get("Location"))
 
 	// 检查内容长度是否超过限制
 	if contentLength := resp.Header.Get("Content-Length"); contentLength != "" {
@@ -259,7 +244,6 @@ func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request, allo
 
 	// 处理重定向
 	if location := resp.Header.Get("Location"); location != "" {
-		fmt.Println("Location:", location)
 		_, _, valid := checkURL(location)
 		if valid {
 			w.Header().Set("Location", entry+location)
