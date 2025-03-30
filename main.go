@@ -77,8 +77,7 @@ func init() {
 }
 
 func main() {
-	//http.HandleFunc(entry, authMiddleware(handleProxy))
-	http.HandleFunc(entry, proxyGHHandle)
+	http.HandleFunc(entry, authMiddleware(proxyGHHandle))
 	log.Printf("Starting server on %s\n", PORT)
 	if err := http.ListenAndServe(PORT, nil); err != nil {
 		log.Fatalf("Server failed: %v\n", err)
@@ -131,14 +130,11 @@ func proxyGHHandle(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(urlStr, "http") {
 		urlStr = "https://" + urlStr
 	}
-	fmt.Println("urlStr:", urlStr)
 
 	// 修复URL格式
 	if strings.Index(urlStr, "://") == -1 {
 		urlStr = strings.Replace(urlStr, "s:/", "s://", 1)
 	}
-
-	fmt.Println("urlStr2:", urlStr)
 
 	// 检查URL是否匹配GitHub格式
 	// author: 作者
@@ -168,7 +164,6 @@ func proxyGHHandle(w http.ResponseWriter, r *http.Request) {
 		urlStr = strings.Replace(urlStr, "/blob/", "/raw/", 1)
 	}
 
-	fmt.Println("urlStr3:", urlStr)
 	// 代理请求
 	proxyRequest(urlStr, w, r, false)
 
@@ -212,8 +207,7 @@ func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request, allo
 	fullURL := target.String()
 	queryStr := target.RawQuery
 
-	fmt.Println("fullURL:", fullURL)
-	fmt.Println("queryStr:", queryStr)
+	fmt.Println("Fetch:", fullURL)
 
 	// 创建请求
 	req, err := http.NewRequest(r.Method, fullURL, r.Body)
