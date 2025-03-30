@@ -1,4 +1,4 @@
-FROM golang:1.23.2-alpine AS builder
+FROM registry.cn-hangzhou.aliyuncs.com/moran233/nn:golang-1.23.2-alpine AS builder
 
 WORKDIR /app
 COPY . .
