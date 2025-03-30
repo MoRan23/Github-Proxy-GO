@@ -57,16 +57,19 @@ func init() {
 	whiteList = parseList(os.Getenv("WHITE_LIST"))
 	blackList = parseList(os.Getenv("BLACK_LIST"))
 	passList = parseList(os.Getenv("PASS_LIST"))
+	fmt.Printf("Set White_List: %v\nSet Black_List: %v\nSet Pass_List: %v\n", whiteList, blackList, passList)
 	// 初始化认证配置
 	authUsername = os.Getenv("USER")
 	authPassword = os.Getenv("PASSWORD")
 	if authUsername == "" || authPassword == "" {
 		log.Fatal("USER or PASSWORD is empty")
 	}
+	fmt.Printf("Set User: %s\nSet Password: %s\n", authUsername, authPassword)
 	// 初始化 jsDelivr 配置
 	if os.Getenv("JSDelivr") == "1" {
 		jsdelivr = 1
 	}
+	fmt.Printf("Set jsdelivr: %d\n", jsdelivr)
 	// 从环境变量读取文件大小限制，默认 1GB (1 << 30)
 	if envSize := os.Getenv("SIZE_LIMIT"); envSize != "" {
 		parsed, err := ParseSimpleSize(envSize)
@@ -82,6 +85,7 @@ func init() {
 	if os.Getenv("ENTRY") != "" {
 		entry = "/" + os.Getenv("ENTRY") + "/"
 	}
+	fmt.Printf("Set Entry: %s\n", entry)
 }
 
 func main() {
