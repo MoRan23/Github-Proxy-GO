@@ -244,7 +244,7 @@ func proxyRequest(w http.ResponseWriter, r *http.Request, targetURL string, allo
 		}
 	}
 
-	// 发送请求
+	// 发送请求aa
 	client := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if allowRedirects {
