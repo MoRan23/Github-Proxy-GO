@@ -78,8 +78,8 @@ func init() {
 }
 
 func main() {
-	http.HandleFunc(entry, authMiddleware(handleProxy))
-
+	//http.HandleFunc(entry, authMiddleware(handleProxy))
+	http.HandleFunc(entry, handleProxy)
 	log.Printf("Starting server on %s\n", PORT)
 	if err := http.ListenAndServe(PORT, nil); err != nil {
 		log.Fatalf("Server failed: %v\n", err)
