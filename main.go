@@ -131,11 +131,14 @@ func proxyGHHandle(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(urlStr, "http") {
 		urlStr = "https://" + urlStr
 	}
+	fmt.Println("urlStr:", urlStr)
 
 	// 修复URL格式
 	if strings.Index(urlStr, "://") == -1 {
 		urlStr = strings.Replace(urlStr, "s:/", "s://", 1)
 	}
+
+	fmt.Println("urlStr2:", urlStr)
 
 	// 检查URL是否匹配GitHub格式
 	// author: 作者
@@ -164,6 +167,8 @@ func proxyGHHandle(w http.ResponseWriter, r *http.Request) {
 	if exp2.MatchString(urlStr) {
 		urlStr = strings.Replace(urlStr, "/blob/", "/raw/", 1)
 	}
+
+	fmt.Println("urlStr3:", urlStr)
 	// 代理请求
 	proxyRequest(urlStr, w, r, false)
 
@@ -206,6 +211,9 @@ func proxyRequest(targetURL string, w http.ResponseWriter, r *http.Request, allo
 	// 生成最终完整 URL（自动处理协议、路径和编码）
 	fullURL := target.String()
 	queryStr := target.RawQuery
+
+	fmt.Println("fullURL:", fullURL)
+	fmt.Println("queryStr:", queryStr)
 
 	// 创建请求
 	req, err := http.NewRequest(r.Method, fullURL, r.Body)
