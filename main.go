@@ -26,6 +26,7 @@ var (
 	exp3 = regexp.MustCompile(`^(?:https?://)?github\.com/(?P<author>.+?)/(?P<repo>.+?)/(?:info|git-).*$`)
 	exp4 = regexp.MustCompile(`^(?:https?://)?raw\.(?:githubusercontent|github)\.com/(?P<author>.+?)/(?P<repo>.+?)/.+?/.+$`)
 	exp5 = regexp.MustCompile(`^(?:https?://)?gist\.(?:githubusercontent|github)\.com/(?P<author>.+?)/.+?/.+$`)
+	exp6 = regexp.MustCompile(`^(?:https?://)?github\.com/([\w-]+)/([\w.-]+)\.git$`)
 
 	regexpList = []*regexp.Regexp{exp1, exp2, exp3, exp4, exp5}
 
@@ -134,6 +135,11 @@ func proxyGHHandle(w http.ResponseWriter, r *http.Request) {
 	// 修复URL格式
 	if strings.Index(urlStr, "://") == -1 {
 		urlStr = strings.Replace(urlStr, "s:/", "s://", 1)
+	}
+
+	if exp6.MatchString(urlStr) {
+		http.Redirect(w, r, entry+urlStr, http.StatusFound)
+		return
 	}
 
 	// 检查URL是否匹配GitHub格式
