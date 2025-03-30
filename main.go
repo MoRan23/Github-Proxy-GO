@@ -314,7 +314,12 @@ func proxyRequest(w http.ResponseWriter, r *http.Request, targetURL string, allo
 func checkURL(u string) []string {
 	// 先查缓存
 	if cached, ok := regexCache.Load(u); ok {
-		return cached.([]string) // 直接返回缓存结果
+		switch cached.(type) {
+		case nil:
+			return nil
+		case []string:
+			return cached.([]string) // 直接返回缓存结果
+		}
 	}
 
 	// 缓存未命中，执行正则匹配
