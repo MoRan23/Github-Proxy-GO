@@ -7,7 +7,7 @@ RUN go mod init github.com/MoRan23/Github-Proxy-GO && \
     go mod tidy && \
     CGO_ENABLED=0 GOOS=linux go build -o github-proxy .
 
-FROM alpine:latest
+FROM registry.cn-hangzhou.aliyuncs.com/moran233/nn:alpine
 
 WORKDIR /app
 COPY --from=builder /app/github-proxy /app/github-proxy
