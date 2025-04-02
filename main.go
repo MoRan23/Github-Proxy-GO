@@ -98,7 +98,7 @@ func init() {
 			fmt.Printf("Set Random Entry: %s\n", rEntry)
 		} else {
 			// 文件不存在或为空，创建新的随机入口
-			rEntry = "/" + RandomString(10) + "/"
+			rEntry = "/" + randomString(10) + "/"
 			fmt.Printf("Set Random Entry: %s\n", rEntry)
 
 			// 将新入口写入文件
@@ -122,7 +122,7 @@ func main() {
 	}
 }
 
-func RandomString(length int) string {
+func randomString(length int) string {
 	b := make([]byte, length)
 	for i := range b {
 		b[i] = charset[seededRand.Intn(len(charset))]
@@ -155,13 +155,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func md5Auth(encode string) bool {
-	// 计算传入字符串的 MD5
-	hasher := md5.New()
-	hasher.Write([]byte(encode))
-	md5Hash := hex.EncodeToString(hasher.Sum(nil))
-
-	// 与预存的 MD5 比较
-	return md5Hash == AUTH_MD5_HASH
+	return encode == AUTH_MD5_HASH
 }
 
 // 处理代理请求
@@ -170,7 +164,6 @@ func proxyGHHandle(w http.ResponseWriter, r *http.Request) {
 	var urlStr string
 	if rEntryOpen == "ON" && strings.HasPrefix(r.URL.Path, rEntry) {
 		urlStr = strings.TrimPrefix(r.URL.Path, rEntry)
-		// 提取第一个/和第二个/之间的字符串
 		// 提取第一个 `/` 之前的字符串
 		firstSlashIndex := strings.Index(urlStr, "/")
 		if firstSlashIndex != -1 {
