@@ -1,7 +1,8 @@
 package main
 
 import (
-	"encoding/base64"
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -36,6 +37,7 @@ var (
 
 	AUTH_USERNAME string // 认证用户名
 	AUTH_PASSWORD string // 认证密码
+	AUTH_MD5_HASH string // 认证密码的 MD5 哈希
 	// REQUIRE_AUTH  = true                     // 是否启用认证
 	entry      = "/"
 	rEntry     string
@@ -67,6 +69,9 @@ func init() {
 		log.Fatal("USER or PASSWORD is empty")
 	}
 	fmt.Printf("Set User: %s\nSet Password: %s\n", AUTH_USERNAME, AUTH_PASSWORD)
+	hasher := md5.New()
+	hasher.Write([]byte(AUTH_USERNAME + ":" + AUTH_PASSWORD))
+	AUTH_MD5_HASH = hex.EncodeToString(hasher.Sum(nil))
 	// 从环境变量读取文件大小限制，默认 1GB (1 << 30)
 	if envSize := os.Getenv("SIZE_LIMIT"); envSize != "" {
 		parsed, err := parseSimpleSize(envSize)
@@ -140,20 +145,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		parts := strings.SplitN(auth, " ", 2)
-		if len(parts) != 2 {
-			http.Error(w, "Invalid authentication", http.StatusUnauthorized)
-			return
-		}
-
-		decoded, err := base64.StdEncoding.DecodeString(parts[1])
-		if err != nil {
-			http.Error(w, "Invalid authentication", http.StatusUnauthorized)
-			return
-		}
-
-		credentials := strings.SplitN(string(decoded), ":", 2)
-		if len(credentials) != 2 || credentials[0] != AUTH_USERNAME || credentials[1] != AUTH_PASSWORD {
+		if !md5Auth(auth) {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 			return
 		}
@@ -162,41 +154,37 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func base64Auth(encode string) bool {
-	decoded, err := base64.StdEncoding.DecodeString(encode)
-	if err != nil {
-		return false
-	}
+func md5Auth(encode string) bool {
+	// 计算传入字符串的 MD5
+	hasher := md5.New()
+	hasher.Write([]byte(encode))
+	md5Hash := hex.EncodeToString(hasher.Sum(nil))
 
-	credentials := strings.SplitN(string(decoded), ":", 2)
-	if len(credentials) != 2 || credentials[0] != AUTH_USERNAME || credentials[1] != AUTH_PASSWORD {
-		return false
-	}
-	return true
+	// 与预存的 MD5 比较
+	return md5Hash == AUTH_MD5_HASH
 }
 
 // 处理代理请求
 func proxyGHHandle(w http.ResponseWriter, r *http.Request) {
 	// /https://github.com/..... -> https://github.com/.....
 	var urlStr string
-	if strings.HasPrefix(r.URL.Path, rEntry) {
+	if rEntryOpen == "ON" && strings.HasPrefix(r.URL.Path, rEntry) {
 		urlStr = strings.TrimPrefix(r.URL.Path, rEntry)
 		// 提取第一个/和第二个/之间的字符串
+		// 提取第一个 `/` 之前的字符串
 		firstSlashIndex := strings.Index(urlStr, "/")
 		if firstSlashIndex != -1 {
-			// 查找第二个斜杠
-			secondSlashIndex := strings.Index(urlStr[firstSlashIndex+1:], "/")
-			if secondSlashIndex != -1 {
-				// 调整secondSlashIndex，因为我们是从firstSlashIndex+1开始搜索的
-				secondSlashIndex += firstSlashIndex + 1
+			// 获取第一个 `/` 之前的部分
+			beforeFirstSlash := urlStr[:firstSlashIndex]
 
-				// 提取两个斜杠之间的内容
-				betweenSlashes := urlStr[firstSlashIndex+1 : secondSlashIndex]
-				if !base64Auth(betweenSlashes) {
-					http.Error(w, "Invalid credentials", http.StatusUnauthorized)
-					return
-				}
+			// 进行 MD5 认证
+			if !md5Auth(beforeFirstSlash) {
+				http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+				return
 			}
+		} else {
+			http.Error(w, "Invalid input.", http.StatusForbidden)
+			return
 		}
 	} else {
 		urlStr = strings.TrimPrefix(r.URL.Path, entry)

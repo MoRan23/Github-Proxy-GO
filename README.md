@@ -27,13 +27,13 @@
 + `PASSWORD` 密码 (eg: `pass`)  
 > [!TIP]  
 >   防止被蹭，身份认证为必须项。  
->   认证头为 `X-My-Auth`, 值为 `Basic base64(USER:PASSWORD)`  
->   使用方法为:  
+>   认证头为 `X-My-Auth`, 值为 `md5(USER:PASSWORD)`  
+>   使用方法为(用户名密码均为`aa`):  
 >   ```shell
 >   # 单次  
->   git -c http.extraHeader="X-My-Auth: Basic YWE6YWE=" clone https://domain/https://github.com/xx/xx.git  
+>   git -c http.extraHeader="X-My-Auth: 8d5f6caa25c00067ead4478915b7ef00" clone https://domain/https://github.com/xx/xx.git  
 >   # 永久  
->   git config --global http.extraHeader "X-My-Auth: Basic YWE6YWE="
+>   git config --global http.extraHeader "X-My-Auth: 8d5f6caa25c00067ead4478915b7ef00"
 > ```
 + `ENTRY` 入口 `uri`, 默认为 `/` (eg: `test`) 此时入口为 `/test/`
 + `SIZE_LIMIT` 请求大小限制，最小单位到MB，最大单位到GB (eg: `1G` 或 `10M` 或 `1G10M`)
@@ -49,7 +49,8 @@ USER=user PASSWORD=pass Github-Proxy-GO
 ```
 ### 更新
 #### 2025-4-2
-+ 添加一个随机值的路径(需通过配置`RAND_ENTRY`环境变量为`ON`开启)，该路径通过`随机路径+base64(USER:PASSWORD)`进行身份认证，无法自己设置，将由程序自动生成，可查看日志获取。
++ 添加一个随机值的路径(需通过配置`RAND_ENTRY`环境变量为`ON`开启)，该路径通过`随机路径+md5(USER:PASSWORD)`进行身份认证，无法自己设置，将由程序自动生成，可查看日志获取。
 > [!TIP]  
 >   例如生成的随机路径为`/aabb/`, 用户名为`aa`, 密码为`bb`
->   则认证路径为`/aabb/YWE6YmI=/https://github.com/xxx`
+>   则认证路径为`/aabb/3a2f6b6d8b508509996c50df7031e53d/https://github.com/xxx`
++ 普通身份认证方式也修改为`md5`加密，不再使用`base64`加密。
