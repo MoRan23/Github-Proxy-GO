@@ -143,8 +143,12 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 // 处理代理请求
 func proxyGHHandle(w http.ResponseWriter, r *http.Request) {
 	// /https://github.com/..... -> https://github.com/.....
-	path := strings.TrimPrefix(r.URL.Path, entry)
-	urlStr := path
+	var urlStr string
+	if strings.HasPrefix(r.URL.Path, rEntry) {
+		urlStr = strings.TrimPrefix(r.URL.Path, rEntry)
+	} else {
+		urlStr = strings.TrimPrefix(r.URL.Path, entry)
+	}
 	// 如果不是以http开头，则添加https
 	if !strings.HasPrefix(urlStr, "http") {
 		urlStr = "https://" + urlStr
