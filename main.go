@@ -37,8 +37,10 @@ var (
 	AUTH_USERNAME string // 认证用户名
 	AUTH_PASSWORD string // 认证密码
 	// REQUIRE_AUTH  = true                     // 是否启用认证
-	entry  = "/"
-	rEntry string
+	entry      = "/"
+	rEntry     string
+	rEntryOpen string
+	fileName   = "rEntry"
 
 	SIZE_LIMIT = 1024 * 1024 * 1024 // 允许的文件大小，默认999GB
 	maxSizeGB  = 999                // 最大文件大小限制
@@ -81,13 +83,33 @@ func init() {
 		entry = "/" + os.Getenv("ENTRY") + "/"
 	}
 	fmt.Printf("Set Entry: %s\n", entry)
-	rEntry = "/" + RandomString(10) + "/"
-	fmt.Printf("Set Random Entry: %s\n", rEntry)
+	// 尝试从文件中读取入口
+	rEntryOpen = os.Getenv("RandEntry")
+	if rEntryOpen == "ON" {
+		data, err := os.ReadFile(fileName)
+		if err == nil && len(data) > 0 {
+			// 文件存在，读取入口
+			rEntry = string(data)
+			fmt.Printf("Set Random Entry: %s\n", rEntry)
+		} else {
+			// 文件不存在或为空，创建新的随机入口
+			rEntry = "/" + RandomString(10) + "/"
+			fmt.Printf("Set Random Entry: %s\n", rEntry)
+
+			// 将新入口写入文件
+			err = os.WriteFile(fileName, []byte(rEntry), 0644)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
 }
 
 func main() {
 	http.HandleFunc(entry, authMiddleware(proxyGHHandle))
-	http.HandleFunc(rEntry, proxyGHHandle)
+	if os.Getenv("RandEntry") == "ON" {
+		http.HandleFunc(rEntry, proxyGHHandle)
+	}
 
 	log.Printf("Starting server on %s\n", PORT)
 	if err := http.ListenAndServe(PORT, nil); err != nil {
@@ -140,12 +162,42 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+func base64Auth(encode string) bool {
+	decoded, err := base64.StdEncoding.DecodeString(encode)
+	if err != nil {
+		return false
+	}
+
+	credentials := strings.SplitN(string(decoded), ":", 2)
+	if len(credentials) != 2 || credentials[0] != AUTH_USERNAME || credentials[1] != AUTH_PASSWORD {
+		return false
+	}
+	return true
+}
+
 // 处理代理请求
 func proxyGHHandle(w http.ResponseWriter, r *http.Request) {
 	// /https://github.com/..... -> https://github.com/.....
 	var urlStr string
 	if strings.HasPrefix(r.URL.Path, rEntry) {
 		urlStr = strings.TrimPrefix(r.URL.Path, rEntry)
+		// 提取第一个/和第二个/之间的字符串
+		firstSlashIndex := strings.Index(urlStr, "/")
+		if firstSlashIndex != -1 {
+			// 查找第二个斜杠
+			secondSlashIndex := strings.Index(urlStr[firstSlashIndex+1:], "/")
+			if secondSlashIndex != -1 {
+				// 调整secondSlashIndex，因为我们是从firstSlashIndex+1开始搜索的
+				secondSlashIndex += firstSlashIndex + 1
+
+				// 提取两个斜杠之间的内容
+				betweenSlashes := urlStr[firstSlashIndex+1 : secondSlashIndex]
+				if !base64Auth(betweenSlashes) {
+					http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+					return
+				}
+			}
+		}
 	} else {
 		urlStr = strings.TrimPrefix(r.URL.Path, entry)
 	}

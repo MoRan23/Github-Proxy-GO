@@ -47,4 +47,7 @@ USER=user PASSWORD=pass Github-Proxy-GO
 ```
 ### 更新
 #### 2025-4-2
-+ 添加一个随机值的路径，该路径无身份认证，无法自己设置，将由程序自动生成，可查看日志获取。
++ 添加一个随机值的路径，该路径通过`随机路径+base64(USER:PASSWORD)`进行身份认证，无法自己设置，将由程序自动生成，可查看日志获取。
+> [!TIP]  
+>   例如生成的随机路径为`/aabb/`, 用户名为`aa`, 密码为`bb`
+>   则认证路径为`/aabb/YWE6YmI=/https://github.com/xxx`
