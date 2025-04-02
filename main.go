@@ -179,6 +179,7 @@ func proxyGHHandle(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid input.", http.StatusForbidden)
 			return
 		}
+		urlStr = strings.TrimPrefix(urlStr, AUTH_MD5_HASH+"/")
 	} else {
 		urlStr = strings.TrimPrefix(r.URL.Path, entry)
 	}
