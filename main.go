@@ -107,7 +107,7 @@ func init() {
 
 func main() {
 	http.HandleFunc(entry, authMiddleware(proxyGHHandle))
-	if os.Getenv("RandEntry") == "ON" {
+	if rEntryOpen == "ON" {
 		http.HandleFunc(rEntry, proxyGHHandle)
 	}
 
