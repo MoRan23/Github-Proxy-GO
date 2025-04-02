@@ -17,6 +17,7 @@
 + 配置项可通过环境变量设置
 + 身份认证功能
 + 可修改入口点
++ 随机路径认证方式
 ### 配置
 + `WHITE_LIST` 白名单 (eg: `user1,user1/repo,*/repo1`)
 + `BLACK_LIST` 黑名单 (eg: `user1/repo,*/repo1`)  
@@ -36,6 +37,7 @@
 > ```
 + `ENTRY` 入口 `uri`, 默认为 `/` (eg: `test`) 此时入口为 `/test/`
 + `SIZE_LIMIT` 请求大小限制，最小单位到MB，最大单位到GB (eg: `1G` 或 `10M` 或 `1G10M`)
++ `RAND_ENTRY` 随机路径认证方式开关，`ON`为开启，其他为关闭 (eg: `ON`)
 ### 部署
 #### Docker
 ```shell
@@ -47,7 +49,7 @@ USER=user PASSWORD=pass Github-Proxy-GO
 ```
 ### 更新
 #### 2025-4-2
-+ 添加一个随机值的路径，该路径通过`随机路径+base64(USER:PASSWORD)`进行身份认证，无法自己设置，将由程序自动生成，可查看日志获取。
++ 添加一个随机值的路径(需通过配置`RAND_ENTRY`环境变量为`ON`开启)，该路径通过`随机路径+base64(USER:PASSWORD)`进行身份认证，无法自己设置，将由程序自动生成，可查看日志获取。
 > [!TIP]  
 >   例如生成的随机路径为`/aabb/`, 用户名为`aa`, 密码为`bb`
 >   则认证路径为`/aabb/YWE6YmI=/https://github.com/xxx`

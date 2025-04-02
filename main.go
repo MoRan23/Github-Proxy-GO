@@ -84,7 +84,7 @@ func init() {
 	}
 	fmt.Printf("Set Entry: %s\n", entry)
 	// 尝试从文件中读取入口
-	rEntryOpen = os.Getenv("RandEntry")
+	rEntryOpen = os.Getenv("RAND_ENTRY")
 	if rEntryOpen == "ON" {
 		data, err := os.ReadFile(fileName)
 		if err == nil && len(data) > 0 {
