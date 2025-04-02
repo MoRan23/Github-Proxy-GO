@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -35,7 +37,8 @@ var (
 	AUTH_USERNAME string // 认证用户名
 	AUTH_PASSWORD string // 认证密码
 	// REQUIRE_AUTH  = true                     // 是否启用认证
-	entry = "/"
+	entry  = "/"
+	rEntry string
 
 	SIZE_LIMIT = 1024 * 1024 * 1024 // 允许的文件大小，默认999GB
 	maxSizeGB  = 999                // 最大文件大小限制
@@ -45,6 +48,10 @@ type ListItem struct {
 	Author string
 	Repo   string
 }
+
+const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+var seededRand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 func init() {
 	// 初始化黑白名单 (可以从环境变量或配置文件加载)
@@ -74,14 +81,26 @@ func init() {
 		entry = "/" + os.Getenv("ENTRY") + "/"
 	}
 	fmt.Printf("Set Entry: %s\n", entry)
+	rEntry = "/" + RandomString(10) + "/"
+	fmt.Printf("Set Random Entry: %s\n", rEntry)
 }
 
 func main() {
 	http.HandleFunc(entry, authMiddleware(proxyGHHandle))
+	http.HandleFunc(rEntry, proxyGHHandle)
+
 	log.Printf("Starting server on %s\n", PORT)
 	if err := http.ListenAndServe(PORT, nil); err != nil {
 		log.Fatalf("Server failed: %v\n", err)
 	}
+}
+
+func RandomString(length int) string {
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return string(b)
 }
 
 // 认证中间件

@@ -45,3 +45,6 @@ docker run -d -p 7888:80 -e USER=user -e PASSWORD=pass --name "githubProxy" regi
 ```shell
 USER=user PASSWORD=pass Github-Proxy-GO
 ```
+### 更新
+#### 2025-4-2
++ 添加一个随机值的路径，该路径无身份认证，无法自己设置，将由程序自动生成，可查看日志获取。
